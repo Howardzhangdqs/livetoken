@@ -106,6 +106,7 @@ async def proxy_messages(request: Request):
     # 创建指标记录
     metrics = store.create_request(ApiType.ANTHROPIC, model)
     metrics.request_body = body_json  # 保存请求体
+    metrics.request_headers = dict(request.headers)  # 保存请求头
     await manager.emit_started(metrics)
     monitor.update()
 
@@ -134,6 +135,8 @@ async def proxy_messages(request: Request):
         async def generate():
             async with httpx.AsyncClient(timeout=None) as client:
                 async with client.stream("POST", url, content=body, headers=headers) as upstream_resp:
+                    # 保存响应头
+                    metrics.response_headers = dict(upstream_resp.headers)
                     # 从响应头获取输入 tokens，如果没有则估算
                     input_tokens, _ = parse_response_headers(
                         dict(upstream_resp.headers), "anthropic"
@@ -153,6 +156,9 @@ async def proxy_messages(request: Request):
         # 非流式请求
         async with httpx.AsyncClient(timeout=None) as client:
             upstream_resp = await client.post(url, content=body, headers=headers)
+
+            # 保存响应头
+            metrics.response_headers = dict(upstream_resp.headers)
 
             # 解析响应获取 token 信息
             try:

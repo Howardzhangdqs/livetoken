@@ -56,6 +56,8 @@ class RequestMetrics:
     end_time: float | None = None
     error: str | None = None
     tokens_estimated: bool = True  # token 是否为估算值，默认 True
+    request_headers: dict[str, str] | None = None  # 客户端请求头
+    response_headers: dict[str, str] | None = None  # 上游响应头
 
     @property
     def ttft(self) -> float | None:
@@ -138,6 +140,8 @@ class RequestMetrics:
             "request_body": self.request_body,
             "response_text": self.accumulated_text,
             "error": self.error,
+            "request_headers": self.request_headers,
+            "response_headers": self.response_headers,
         }
 
 
