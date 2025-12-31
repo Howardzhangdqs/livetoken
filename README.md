@@ -72,6 +72,12 @@ uvicorn main:app --host 0.0.0.0 --port 7357
 baseurl: http://localhost:7357
 ```
 
+或者添加环境变量：
+
+```bash
+export ANTHROPIC_BASE_URL=http://localhost:7357
+```
+
 ### 访问 Web 面板
 
 浏览器打开：http://localhost:7357
@@ -152,13 +158,6 @@ livetoken/
 ```bash
 # 安装开发依赖
 uv sync --dev
-
-# 运行测试
-pytest
-
-# 代码格式化
-black .
-ruff check .
 ```
 
 ## License
