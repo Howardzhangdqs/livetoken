@@ -207,26 +207,73 @@ async function showDetail(requestId) {
 
         const data = await res.json();
 
-        // 格式化请求体
+        // 格式化请求体（解析视图）
         let requestText = '';
         if (data.request_body) {
-            const body = data.request_body;
-            if (body.messages) {
-                requestText = body.messages.map(m => {
-                    const content = typeof m.content === 'object'
-                        ? JSON.stringify(m.content, null, 2)
-                        : m.content || '';
-                    return `[${m.role}]: ${content}`;
-                }).join('\n\n');
-            } else if (body.prompt) {
-                requestText = body.prompt;
+            const requestBody = data.request_body;
+
+            // 先显示 system prompt（如果有）
+            if (requestBody.system && requestBody.system.length > 0) {
+                const systemContent = requestBody.system.map(item => {
+                    if (typeof item === 'string') {
+                        return `<div class="msg-block"><div class="msg-header">系统提示</div><div class="msg-simple-content">${escapeHtml(item)}</div></div>`;
+                    } else if (typeof item === 'object') {
+                        const type = item.type || 'text';
+                        const text = item.text || '';
+                        const cacheControl = item.cache_control ? ` <span class="msg-meta">(ephemeral)</span>` : '';
+                        return `<div class="msg-block"><div class="msg-header">系统提示</div><table class="msg-table"><tbody><tr><td class="msg-meta">type</td><td class="msg-meta">${escapeHtml(type)}</td></tr></tbody></table><div class="msg-content">${escapeHtml(text)}${cacheControl}</div></div>`;
+                    }
+                }).join('');
+                requestText = systemContent;
+            }
+
+            // 然后显示 messages
+            if (requestBody.messages) {
+                // 以 HTML 表格形式展示 messages
+                const messagesHtml = requestBody.messages.map((m) => {
+                    const role = m.role || 'unknown';
+                    const roleLabel = role === 'user' ? '用户' : role === 'assistant' ? '助手' : role;
+                    const content = m.content;
+
+                    // 如果 content 是数组（多模态）
+                    if (Array.isArray(content)) {
+                        const contentParts = content.map(item => {
+                            const type = item.type || 'text';
+                            if (type === 'text') {
+                                const text = item.text || '';
+                                const cacheControl = item.cache_control ? ` <span class="msg-meta">(ephemeral)</span>` : '';
+                                return `<table class="msg-table"><tbody><tr><td class="msg-meta">type</td><td class="msg-meta">text</td></tr></tbody></table><div class="msg-content">${escapeHtml(text)}${cacheControl}</div>`;
+                            } else if (type === 'thinking') {
+                                const thinking = item.thinking || '';
+                                const signature = item.signature ? ` <span class="msg-meta">sig: ${escapeHtml(item.signature).slice(0, 8)}</span>` : '';
+                                return `<table class="msg-table"><tbody><tr><td class="msg-meta">type</td><td class="msg-meta">thinking</td></tr></tbody></table><div class="msg-content msg-thinking">${escapeHtml(thinking)}${signature}</div>`;
+                            } else if (type === 'image') {
+                                const source = item.source || {};
+                                return `<table class="msg-table"><tbody><tr><td class="msg-meta">type</td><td class="msg-meta">image</td></tr></tbody></table><div class="msg-content msg-meta-text">${escapeHtml(JSON.stringify(source))}</div>`;
+                            } else {
+                                return `<table class="msg-table"><tbody><tr><td class="msg-meta">type</td><td class="msg-meta">${escapeHtml(type)}</td></tr></tbody></table><div class="msg-content msg-meta-text">${escapeHtml(JSON.stringify(item))}</div>`;
+                            }
+                        }).join('');
+                        return `<div class="msg-block"><div class="msg-header">${roleLabel}</div>${contentParts}</div>`;
+                    } else {
+                        // 简单文本内容
+                        return `<div class="msg-block"><div class="msg-header">${roleLabel}</div><div class="msg-simple-content">${escapeHtml(String(content))}</div></div>`;
+                    }
+                }).join('');
+                requestText += messagesHtml;
+            } else if (requestBody.prompt) {
+                requestText += `<div class="msg-simple-content">${escapeHtml(requestBody.prompt)}</div>`;
             } else {
-                requestText = JSON.stringify(body, null, 2);
+                requestText += `<pre class="msg-json">${escapeHtml(JSON.stringify(requestBody, null, 2))}</pre>`;
             }
         }
 
         // 响应文本
         const responseText = data.response_text || '(无)';
+
+        // 原始 JSON
+        const requestRaw = data.request_body ? JSON.stringify(data.request_body, null, 2) : '{}';
+        const responseRaw = data.response_text || '(无)';
 
         // 元数据
         const metaGrid = `
@@ -242,20 +289,117 @@ async function showDetail(requestId) {
             </div>
         `;
 
+        // 渲染请求头和响应头
+        const requestHeadersHtml = renderHeaders(data.request_headers, '请求头');
+        const responseHeadersHtml = renderHeaders(data.response_headers, '响应头');
+
         modalBody.innerHTML = `
-            <div class="detail-section">
-                <div class="detail-label">元数据</div>
-                ${metaGrid}
-            </div>
-            <div class="detail-section">
-                <div class="detail-label">输入</div>
-                <div class="detail-content">${escapeHtml(requestText)}</div>
-            </div>
-            <div class="detail-section">
-                <div class="detail-label">输出</div>
-                <div class="detail-content">${escapeHtml(responseText)}</div>
+            <div class="modal-layout">
+                <div class="modal-left">
+                    ${requestHeadersHtml}
+                    ${responseHeadersHtml}
+                </div>
+                <div class="modal-resizer"></div>
+                <div class="modal-right">
+                    <div class="detail-section">
+                        <div class="detail-label">元数据</div>
+                        ${metaGrid}
+                    </div>
+                    <div class="detail-section">
+                        <div class="detail-label-with-toggle">
+                            <span>输入</span>
+                            <button class="view-toggle" data-type="request">查看 Raw</button>
+                        </div>
+                        <div class="detail-content" id="request-input">${requestText}</div>
+                    </div>
+                    <div class="detail-section">
+                        <div class="detail-label-with-toggle">
+                            <span>输出</span>
+                            <button class="view-toggle" data-type="response">查看 Raw</button>
+                        </div>
+                        <div class="detail-content" id="response-output">${escapeHtml(responseText)}</div>
+                    </div>
+                </div>
             </div>
         `;
+
+        // 将完整数据存储在模态框元素上（不是 HTML 属性）
+        modalBody._requestData = {
+            requestRaw,
+            requestText,
+            responseRaw,
+            responseText
+        };
+
+        // 绑定切换按钮事件
+        modalBody.querySelectorAll('.view-toggle').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const type = btn.dataset.type;
+                const data = modalBody._requestData;
+                const isRaw = btn.classList.contains('active');
+
+                if (type === 'request') {
+                    const content = document.getElementById('request-input');
+                    if (isRaw) {
+                        content.innerHTML = data.requestText;
+                        btn.classList.remove('active');
+                        btn.textContent = '查看 Raw';
+                    } else {
+                        content.textContent = data.requestRaw;
+                        btn.classList.add('active');
+                        btn.textContent = '查看解析';
+                    }
+                } else {
+                    const content = document.getElementById('response-output');
+                    if (isRaw) {
+                        content.textContent = data.responseText;
+                        btn.classList.remove('active');
+                        btn.textContent = '查看 Raw';
+                    } else {
+                        content.textContent = data.responseRaw;
+                        btn.classList.add('active');
+                        btn.textContent = '查看解析';
+                    }
+                }
+            });
+        });
+
+        // 分隔条拖动功能
+        const resizer = modalBody.querySelector('.modal-resizer');
+        const leftPanel = modalBody.querySelector('.modal-left');
+        const layout = modalBody.querySelector('.modal-layout');
+
+        if (resizer && leftPanel && layout) {
+            let isResizing = false;
+
+            resizer.addEventListener('mousedown', () => {
+                isResizing = true;
+                resizer.classList.add('active');
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+
+                const rect = layout.getBoundingClientRect();
+                const newWidth = e.clientX - rect.left;
+
+                // 限制最小/最大宽度
+                if (newWidth >= 200 && newWidth <= rect.width - 400) {
+                    leftPanel.style.width = newWidth + 'px';
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isResizing) {
+                    isResizing = false;
+                    resizer.classList.remove('active');
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                }
+            });
+        }
 
     } catch (e) {
         modalBody.innerHTML = '<p style="text-align:center;color:#f85149;">加载失败</p>';
@@ -282,4 +426,37 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// 渲染请求头/响应头表格
+function renderHeaders(headers, label) {
+    if (!headers || Object.keys(headers).length === 0) {
+        return '';
+    }
+
+    const rows = Object.entries(headers).map(([key, value]) => {
+        const escapedKey = escapeHtml(key);
+        const escapedValue = escapeHtml(String(value));
+        return `
+            <tr class="header-row">
+                <td class="header-key">${escapedKey}</td>
+                <td class="header-value">${escapedValue}</td>
+            </tr>
+        `;
+    }).join('');
+
+    return `
+        <div class="detail-section">
+            <div class="detail-label">${label} <span class="header-count">(${Object.keys(headers).length})</span></div>
+            <table class="headers-table">
+                <thead>
+                    <tr>
+                        <th>名称</th>
+                        <th>值</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+    `;
 }
