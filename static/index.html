@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiveToken Monitor</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📡 LiveToken Monitor</h1>
+            <div class="header-right">
+                <div class="stats" id="stats">
+                    <span class="stat">请求: <strong id="total-requests">0</strong></span>
+                    <span class="stat">TTFT: <strong id="avg-ttft">0</strong>s</span>
+                    <span class="stat">速度: <strong id="avg-speed">0</strong> t/s</span>
+                </div>
+                <button class="btn-clear" onclick="clearHistory()">清除历史</button>
+            </div>
+        </header>
+
+        <main>
+            <table class="requests-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>模型</th>
+                        <th>状态</th>
+                        <th>时间</th>
+                        <th>TTFT</th>
+                        <th>Tokens</th>
+                        <th>速度</th>
+                    </tr>
+                </thead>
+                <tbody id="requests-body">
+                    <tr><td colspan="7" class="empty">暂无请求</td></tr>
+                </tbody>
+            </table>
+        </main>
+    </div>
+
+    <!-- 详情模态框 -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="modal-title">请求详情</span>
+                <button class="modal-close" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <!-- 动态填充 -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

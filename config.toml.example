@@ -1,0 +1,17 @@
+# LiveToken 配置文件
+# 复制此文件为 config.toml 并修改配置
+
+# Anthropic API 上游地址
+anthropic_base_url = "https://api.anthropic.com"
+
+# OpenAI API 上游地址
+openai_base_url = "https://api.openai.com"
+
+# 默认 API Key（可选，转发时用于认证）
+# api_key = "sk-xxxxx"
+
+# 环境变量优先级高于配置文件
+# 可以通过以下环境变量覆盖：
+# - ANTHROPIC_BASE_URL
+# - OPENAI_BASE_URL
+# - API_KEY
